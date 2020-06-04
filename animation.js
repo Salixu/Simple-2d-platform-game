@@ -1,22 +1,12 @@
-// Frank Poth 12/23/2017
+(function animation() {
 
-/* This example will show you how to do custom sprite animation in JavaScript.
-It uses an Animation class that handles updating and changing a sprite's current
-frame, and a sprite_sheet object to hold the source image and the different animation
-frame sets. */
+  // 864x280
+  const PILLGRIM_WIDTH = 108 // 864/8
+  const PILLGRIM_HEIGHT = 140 //  280/2
+  const BULLET_WIDTH = 23;
+  const BULLET_HEIGHT = 24;
 
-(function() {
-  "use strict";
 
-  /* Each sprite sheet tile is 16x16 pixels in dimension. */
-  const SPRITE_SIZE = 16;
-
-  /* The Animation class manages frames within an animation frame set. The frame
-  set is an array of values that correspond to the location of sprite images in
-  the sprite sheet. For example, a frame value of 0 would correspond to the first
-  sprite image / tile in the sprite sheet. By arranging these values in a frame set
-  array, you can create a sequence of frames that make an animation when played in
-  quick succession. */
   var Animation = function(frame_set, delay) {
 
     this.count = 0; // Counts the number of game cycles since the last frame change.
@@ -24,6 +14,7 @@ frame sets. */
     this.frame = 0; // The value in the sprite sheet of the sprite image / tile to display.
     this.frame_index = 0; // The frame's index in the current animation frame set.
     this.frame_set = frame_set; // The current animation frame set that holds sprite tile values.
+    this.direction = 0;
 
   };
 
@@ -32,7 +23,7 @@ frame sets. */
     /* This changes the current animation frame set. For example, if the current
     set is [0, 1], and the new set is [2, 3], it changes the set to [2, 3]. It also
     sets the delay. */
-    change: function(frame_set, delay = 15) {
+    change: function(frame_set, delay = 15, direction) {
 
       if (this.frame_set != frame_set) { // If the frame set is different:
 
@@ -41,11 +32,11 @@ frame sets. */
         this.frame_index = 0; // Start at the first frame in the new frame set.
         this.frame_set = frame_set; // Set the new frame set.
         this.frame = this.frame_set[this.frame_index]; // Set the new frame value.
+        this.direction = direction;
 
       }
 
     },
-
     /* Call this on each game cycle. */
     update: function() {
 
@@ -65,12 +56,22 @@ frame sets. */
 
   };
 
-  var buffer, controller, display, loop, player, render, resize, sprite_sheet;
+  var buffer, iteration = 1,
+    controller, buffer2,
+    display, loop, player, newBullet,
+    render, resize, sprite_sheet,
+    bullet_image, bullet, live_bullets,
+    bullets_objects, live_objects_iteration = 0,
+    endGame, renderSummary, alive = 1,
+    seconds = 0,
+    soldier_image, war_background, difficulty = 60,
+    loopSummary, endgame = 0,
+    display2;
 
   buffer = document.createElement("canvas").getContext("2d");
+  buffer2 = document.createElement("canvas").getContext("2d");
   display = document.querySelector("canvas").getContext("2d");
 
-  /* I made some changes to the controller object. */
   controller = {
 
     /* Now each key object knows its physical state as well as its active state.
@@ -88,12 +89,14 @@ frame sets. */
       active: false,
       state: false
     },
+    r: {
+      active: false
+    },
 
     keyUpDown: function(event) {
 
       /* Get the physical state of the key being pressed. true = down false = up*/
       var key_state = (event.type == "keydown") ? true : false;
-
       switch (event.keyCode) {
 
         case 37: // left key
@@ -121,27 +124,36 @@ frame sets. */
 
           break;
 
+        case 82: // 'r' key
+          controller.r.active = true;
+          break;
+
       }
-
-      //console.log("left:  " + controller.left.state + ", " + controller.left.active + "\nright: " + controller.right.state + ", " + controller.right.active + "\nup:    " + controller.up.state + ", " + controller.up.active);
-
     }
 
   };
 
+  //random function multiple usages in code
+  function random(min, max) {
+    var min = min;
+    var max = max;
+    return Math.floor(Math.random() * (max - min)) + min;
+  }
+
   /* The player object is just a rectangle with an animation object. */
   player = {
 
-    animation: new Animation(), // You don't need to setup Animation right away.
+    animation: new Animation(),
     jumping: true,
-    height: 16,
-    width: 16,
-    x: 0,
-    y: 40 - 18,
+    height: PILLGRIM_HEIGHT,
+    width: PILLGRIM_WIDTH,
+    x: 10,
+    y: 0,
     x_velocity: 0,
     y_velocity: 0
 
   };
+
 
   /* The sprite sheet object holds the sprite sheet graphic and some animation frame
   sets. An animation frame set is just an array of frame values that correspond to
@@ -149,107 +161,182 @@ frame sets. */
   sprite_sheet = {
 
     frame_sets: [
-      [0, 1],
-      [2, 3],
-      [4, 5]
-    ], // standing still, walk right, walk left
+      [0, 1, 2, 3, 4, 5, 6, 7],
+      [0, 1, 2, 3, 4, 5, 6, 7],
+      [0]
+    ],
     image: new Image()
 
   };
 
-  loop = function(time_stamp) {
 
-    if (controller.up.active && !player.jumping) {
-
-      controller.up.active = false;
-      player.jumping = true;
-      player.y_velocity -= 2.5;
-
-    }
-
-    if (controller.left.active) {
-
-      /* To change the animation, all you have to do is call animation.change. */
-      player.animation.change(sprite_sheet.frame_sets[2], 15);
-      player.x_velocity -= 0.05;
-
-    }
-
-    if (controller.right.active) {
-
-      player.animation.change(sprite_sheet.frame_sets[1], 15);
-      player.x_velocity += 0.05;
-
-    }
-
-    /* If you're just standing still, change the animation to standing still. */
-    if (!controller.left.active && !controller.right.active) {
-
-      player.animation.change(sprite_sheet.frame_sets[0], 20);
-
-    }
-
-    player.y_velocity += 0.25;
-
-    player.x += player.x_velocity;
-    player.y += player.y_velocity;
-    player.x_velocity *= 0.9;
-    player.y_velocity *= 0.9;
-
-    if (player.y + player.height > buffer.canvas.height - 2) {
-
-      player.jumping = false;
-      player.y = buffer.canvas.height - 2 - player.height;
-      player.y_velocity = 0;
-
-    }
-
-    if (player.x + player.width < 0) {
-
-      player.x = buffer.canvas.width;
-
-    } else if (player.x > buffer.canvas.width) {
-
-      player.x = -player.width;
-
-    }
-
-    player.animation.update();
-
-    render();
-
-    window.requestAnimationFrame(loop);
-
+  bullets_objects = [];
+  live_bullets = [];
+  bullet_image = {
+    image: new Image()
   };
 
+  soldier_image = {
+    image: new Image()
+  };
+
+  loop = function() {
+    if (alive == 1) {
+
+      if (controller.up.active && !player.jumping) {
+
+        controller.up.active = false;
+        player.jumping = true;
+        player.y_velocity -= 22;
+
+      }
+
+      if (controller.right.active) {
+
+        player.animation.change(sprite_sheet.frame_sets[0], 10, 0);
+        player.x_velocity += 0.35;
+
+      }
+
+      if (controller.left.active) {
+
+        player.animation.change(sprite_sheet.frame_sets[1], 10, 1);
+        player.x_velocity -= 0.35;
+
+      }
+
+      if (!controller.left.active && !controller.right.active) {
+
+        player.animation.change(sprite_sheet.frame_sets[2], 20, 0);
+
+      }
+
+      player.y_velocity += 1.09;
+      player.x += player.x_velocity;
+      player.y += player.y_velocity;
+      player.x_velocity *= 0.95;
+      player.y_velocity *= 0.99;
+
+
+      // bottom collision
+      if (player.y + player.height > buffer.canvas.height) {
+
+        player.jumping = false;
+        player.y = buffer.canvas.height - player.height;
+        player.y_velocity = 0;
+
+      }
+
+      // right and left sides collisions
+
+      if (player.x <= 0) {
+        player.x = 0;
+      } else if (player.x >= buffer.canvas.width - 100) {
+        player.x = buffer.canvas.width - 100;
+      }
+
+      //difficulty increase
+
+      if (iteration > 500 && iteration < 1000) {
+        difficulty = 50;
+      } else if (iteration > 1000 && iteration < 1500) {
+        difficulty = 40;
+      } else if (iteration > 1500) {
+        difficulty = 30;
+      }
+
+      //creating new bullets
+
+      if (iteration > live_objects_iteration) {
+        live_objects_iteration = live_objects_iteration + difficulty;
+        var temp_random = random(0, 60);
+        if (bullets_objects[temp_random].x < 0) {
+          bullets_objects[temp_random] = {
+            animation: new Animation(),
+            height: BULLET_HEIGHT,
+            width: BULLET_WIDTH,
+            x: 1920,
+            y: random(800, 980),
+            x_velocity: 0,
+          };
+          live_bullets.push(bullets_objects[temp_random]);
+        } else {
+          live_bullets.push(bullets_objects[temp_random]);
+        }
+      }
+
+      iteration++;
+      //bullet movement and collision
+      for (var i = 0; i < live_bullets.length; i++) {
+        live_bullets[i].x_velocity -= 3;
+        live_bullets[i].x += live_bullets[i].x_velocity;
+        live_bullets[i].x_velocity *= 0.8;
+
+        if (
+          live_bullets[i].x > player.x &&
+          live_bullets[i].x < player.x + player.width &&
+          live_bullets[i].y > player.y &&
+          live_bullets[i].y < player.y + player.height
+        ) {
+          alive = 0;
+
+        }
+      }
+      player.animation.update();
+      render();
+
+      window.requestAnimationFrame(loop);
+
+
+    } else {
+      renderSummary();
+    }
+  };
   render = function() {
 
-    /* Draw the background. */
-    buffer.fillStyle = "#7ec0ff";
+    //background
+    buffer.fillStyle = "white";
     buffer.fillRect(0, 0, buffer.canvas.width, buffer.canvas.height);
-    buffer.strokeStyle = "#8ed0ff";
-    buffer.lineWidth = 10;
-    buffer.beginPath();
-    buffer.moveTo(0, 0);
-    buffer.bezierCurveTo(40, 20, 40, 0, 80, 0);
-    buffer.moveTo(0, 0);
-    buffer.bezierCurveTo(40, 20, 40, 20, 80, 0);
-    buffer.stroke();
-    buffer.fillStyle = "#009900";
-    buffer.fillRect(0, 36, buffer.canvas.width, 4);
+    buffer.rect(20, 20, 150, 100);
+    buffer.fillStyle = "black";
+    buffer.font = "bold 68px Arial";
+    buffer.fillText(seconds, 50, 50);
 
-    /* When you draw your sprite, just use the animation frame value to determine
-    where to cut your image from the sprite sheet. It's the same technique used
-    for cutting tiles out of a tile sheet. Here I have a very easy implementation
-    set up because my sprite sheet is only a single row. */
-
-    /* 02/07/2018 I added Math.floor to the player's x and y positions to eliminate
-    antialiasing issues. Take out the Math.floor to see what I mean. */
-    buffer.drawImage(sprite_sheet.image, player.animation.frame * SPRITE_SIZE, 0, SPRITE_SIZE, SPRITE_SIZE, Math.floor(player.x), Math.floor(player.y), SPRITE_SIZE, SPRITE_SIZE);
-
+    //moving objects
+    buffer.drawImage(sprite_sheet.image, player.animation.frame * PILLGRIM_WIDTH, player.animation.direction * PILLGRIM_HEIGHT,
+      PILLGRIM_WIDTH, PILLGRIM_HEIGHT, Math.floor(player.x), Math.floor(player.y), PILLGRIM_WIDTH, PILLGRIM_HEIGHT);
+    for (var i = 0; i < live_bullets.length; i++) {
+      buffer.drawImage(bullet_image.image, Math.floor(live_bullets[i].x), live_bullets[i].y);
+    }
     display.drawImage(buffer.canvas, 0, 0, buffer.canvas.width, buffer.canvas.height, 0, 0, display.canvas.width, display.canvas.height);
 
   };
+
+  renderSummary = function() {
+    buffer2.drawImage(soldier_image.image, 0, 0)
+    buffer2.fillStyle = "yellow";
+    buffer2.font = "bold 68px Arial";
+    buffer2.fillText("Survived " + " for " + seconds + " seconds", 200, 150);
+    buffer2.fillText("Press 'R' to restart", 600, 400);
+
+    display.drawImage(buffer2.canvas, 0, 0, buffer2.canvas.width, buffer2.canvas.height, 0, 0, display.canvas.width, display.canvas.height);
+    // void ctx.drawImage(image, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight)
+    endgame = 1;
+    controller.r.active = false;
+    window.requestAnimationFrame(loopSummary);
+  }
+
+  loopSummary = function() {
+    if (endgame == 1) {
+      if (controller.r.active) {
+        endgame = 0;
+        location.reload();
+      }
+      window.requestAnimationFrame(loopSummary);
+    } else {
+      endgame = 0;
+    }
+  }
 
   resize = function() {
 
@@ -271,22 +358,43 @@ frame sets. */
   //// INITIALIZE ////
   ////////////////////
 
-  buffer.canvas.width = 80;
-  buffer.canvas.height = 40;
+  buffer.canvas.width = 1920;
+  buffer.canvas.height = 1024;
+
+  buffer2.canvas.width = 1920;
+  buffer2.canvas.height = 1024;
 
   window.addEventListener("resize", resize);
 
   window.addEventListener("keydown", controller.keyUpDown);
   window.addEventListener("keyup", controller.keyUpDown);
+  window.addEventListener("r", controller.keyUpDown)
+
 
   resize();
 
-  sprite_sheet.image.addEventListener("load", function(event) { // When the load event fires, do this:
-
+  sprite_sheet.image.addEventListener("load", function(event) {
+    setInterval(function() {
+      seconds++;
+    }, 1000);
+    for (var i = 0; i < 60; i++) {
+      bullets_objects.push(bullet = {
+        animation: new Animation(),
+        height: BULLET_HEIGHT,
+        width: BULLET_WIDTH,
+        x: 1920,
+        y: random(800, 980),
+        x_velocity: 0,
+      });
+    }
+    console.log("animation");
     window.requestAnimationFrame(loop); // Start the game loop.
 
   });
 
-  sprite_sheet.image.src = "animation.png"; // Start loading the image.
+  sprite_sheet.image.src = "images/pilgrim_animation.png";
+  bullet_image.image.src = "images/bullet.png";
+  soldier_image.image.src = "images/alone_soldier.jpg";
+
 
 })();
